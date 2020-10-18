@@ -1,6 +1,4 @@
-import java.io.File;  // Import the File class
 import java.io.*;
-import java.nio.file.*;
 import java.util.*;
 import java.io.IOException;
 import java.io.InputStream;
@@ -15,20 +13,26 @@ import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.analysis.standard.StandardAnalyzer;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.Field;
-import org.apache.lucene.document.Field.Store;
-import org.apache.lucene.document.LongPoint;
 import org.apache.lucene.document.StringField;
 import org.apache.lucene.document.TextField;
 import org.apache.lucene.index.IndexWriter;
 import org.apache.lucene.index.IndexWriterConfig;
 import org.apache.lucene.index.IndexWriterConfig.OpenMode;
 import org.apache.lucene.index.Term;
+import org.apache.lucene.index.Terms;
+import org.apache.lucene.index.TermsEnum;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.FSDirectory;
+import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.ToStringUtils;
+import org.apache.lucene.index.IndexReader;
+import org.apache.lucene.index.DirectoryReader;
+import org.apache.lucene.document.FieldType;
+import org.apache.lucene.document.Field;
 import org.apache.lucene.store.FSDirectory;
+
 public class indexing {
-    public static void main(String[] args) throws IOException{
+    public static void main(String[] args) throws IOException {
         docSaver();
         // Input folder
         String docsPath = "inputFiles";
@@ -45,7 +49,6 @@ public class indexing {
 
             // analyzer with the default stop words
             Analyzer analyzer = new StandardAnalyzer();
-            
 
             // IndexWriter Configuration
             IndexWriterConfig iwc = new IndexWriterConfig(analyzer);
@@ -61,8 +64,9 @@ public class indexing {
         } catch (IOException e) {
             e.printStackTrace();
         }
+        termFrequency("hi");
     }
-    
+
     // This method seperates the group's documents from the whole dataset based on
     // group number
     static String[] docSplitter(int groupNum, String text) {
@@ -72,25 +76,32 @@ public class indexing {
         docs = Arrays.copyOfRange(docs, begin, end);
         return docs;
     }
-    //save docs to different .txt file in input files
-    static void docSaver(){
-        try{ 
+
+    // save docs to different .txt file in input files
+    static void docSaver() {
+        try {
             String text = Files.readString(Path.of("lucene_ dataset.txt"));
             int gpNum = 5;
             String[] docs = docSplitter(gpNum, text);
             int i = 0;
-            for(String doc: docs){
-                System.out.println(doc + " " + i);
+            for (String doc : docs) {
                 String name = "inputFiles/data" + Integer.toString(i++) + ".txt";
-                PrintWriter out = new PrintWriter(name);
-                out.println(doc);
-                out.close();
+                txtSaver(name, doc);
             }
-        }catch(IOException ioe){
-        ioe.printStackTrace();
+        } catch (IOException ioe) {
+            ioe.printStackTrace();
         }
     }
-
+    // save content to .txt file in given path
+    static void txtSaver(String path,String content){
+        try{
+            PrintWriter out = new PrintWriter(path);
+            out.println(content);
+            out.close();
+        }catch(IOException ioe){
+            ioe.printStackTrace();
+        }
+    }
 
     static void indexDocs(final IndexWriter writer, Path path) throws IOException {
         // Directory?
@@ -120,8 +131,9 @@ public class indexing {
             Document doc = new Document();
 
             doc.add(new StringField("path", file.toString(), Field.Store.YES));
-
-            doc.add(new TextField("contents", new String(Files.readAllBytes(file)), Store.YES));
+            FieldType myFieldType = new FieldType(TextField.TYPE_STORED);
+            myFieldType.setStoreTermVectors(true);
+            doc.add(new Field("contents", new String(Files.readAllBytes(file)), myFieldType));
 
             // Updates a document by first deleting the document(s)
             // containing <code>term</code> and then adding the new
@@ -129,6 +141,58 @@ public class indexing {
             // by a reader on the same index
             writer.updateDocument(new Term("path", file.toString()), doc);
         }
+    }
+
+    //find term frequency for each term in each document and save result csv file
+    static void termFrequency(String indexPath){
+
+        List<Map<String, Long>> listofTF = new ArrayList<Map<String, Long>>();
+        Map<String, List<Long>> docPerTerm = new HashMap<String,List<Long>>();
+
+        for(int i = 1; i < 103 ; i++){
+            Map<String,Long> tf = new HashMap<String,Long>();
+            try{
+                IndexReader reader = DirectoryReader.open(FSDirectory.open(Paths.get("indexedFiles")));
+                Terms termVector = reader.getTermVector(i , "contents");
+                TermsEnum itr = termVector.iterator();
+                BytesRef term = null;
+                while((term = itr.next()) != null){
+
+                    String termText = term.utf8ToString();
+                    long termFreq = itr.totalTermFreq();
+
+                    tf.put(termText, termFreq);
+
+                    if(docPerTerm.containsKey(termText)){
+                        List<Long> current = docPerTerm.get(termText);
+                        current.add(new Long(i));
+                        docPerTerm.put(termText , current);
+                    }
+                    else{
+                        List<Long> current = new ArrayList<Long>();
+                        current.add(new Long(i));
+                        docPerTerm.put(termText , current);
+                    }
+                    // System.out.println("term: "+termText+", termFreq = "+termFreq+", docCount = "+docCount); 
+                }
+                String path = "result/document" + Integer.toString(i) + ".txt";
+                txtSaver(path, tf.toString());
+                listofTF.add(tf);
+                reader.close();
+
+            }catch(IOException ioe){
+                ioe.printStackTrace();
+            }
+        }
+        String path = "result/DocPerTerm.txt";
+        txtSaver(path, docPerTerm.toString());
+        // for(int i = 0 ; i < 102 ; i++){
+        //     System.out.println("----------------------------------------------->DOCUMET" + i);
+        //     for(Map.Entry<String,Long> entry : listofTF.get(i).entrySet()){
+        //         System.out.println(entry.getKey() + entry.getValue());
+
+        //     }
+        // }
     }
 
         
