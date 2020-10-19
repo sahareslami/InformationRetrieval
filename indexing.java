@@ -24,12 +24,12 @@ import org.apache.lucene.index.TermsEnum;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.FSDirectory;
 import org.apache.lucene.util.BytesRef;
-import org.apache.lucene.util.ToStringUtils;
+// import org.apache.lucene.util.ToStringUtils;s
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.DirectoryReader;
 import org.apache.lucene.document.FieldType;
-import org.apache.lucene.document.Field;
-import org.apache.lucene.store.FSDirectory;
+import org.apache.lucene.index.PostingsEnum;
+
 
 public class indexing {
     public static void main(String[] args) throws IOException {
@@ -107,11 +107,16 @@ public class indexing {
         // Directory?
         if (Files.isDirectory(path)) {
             // Iterate directory
+
             Files.walkFileTree(path, new SimpleFileVisitor<Path>() {
+                // Map<Integer , String> mapToReal = new HashMap<Integer, String>();
+                // int k = 0;
                 @Override
                 public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
                     try {
                         // Index this file
+                        // System.out.println("hi->");
+                        // mapToReal.put(k , file.toString());
                         indexDoc(writer, file, attrs.lastModifiedTime().toMillis());
                     } catch (IOException ioe) {
                         ioe.printStackTrace();
@@ -129,12 +134,11 @@ public class indexing {
         try (InputStream stream = Files.newInputStream(file)) {
             // Create lucene Document
             Document doc = new Document();
-
             doc.add(new StringField("path", file.toString(), Field.Store.YES));
             FieldType myFieldType = new FieldType(TextField.TYPE_STORED);
             myFieldType.setStoreTermVectors(true);
             doc.add(new Field("contents", new String(Files.readAllBytes(file)), myFieldType));
-
+            
             // Updates a document by first deleting the document(s)
             // containing <code>term</code> and then adding the new
             // document. The delete and then add are atomic as seen
@@ -149,17 +153,21 @@ public class indexing {
         List<Map<String, Long>> listofTF = new ArrayList<Map<String, Long>>();
         Map<String, List<Long>> docPerTerm = new HashMap<String,List<Long>>();
 
-        for(int i = 1; i < 103 ; i++){
+        for(int i = 0; i < 103 ; i++){
             Map<String,Long> tf = new HashMap<String,Long>();
             try{
                 IndexReader reader = DirectoryReader.open(FSDirectory.open(Paths.get("indexedFiles")));
                 Terms termVector = reader.getTermVector(i , "contents");
                 TermsEnum itr = termVector.iterator();
                 BytesRef term = null;
+                PostingsEnum postings = null;
+
                 while((term = itr.next()) != null){
 
                     String termText = term.utf8ToString();
-                    long termFreq = itr.totalTermFreq();
+                    postings = itr.postings(postings, PostingsEnum.FREQS);
+                    postings.nextDoc();
+                    long termFreq = postings.freq();
 
                     tf.put(termText, termFreq);
 
@@ -173,7 +181,7 @@ public class indexing {
                         current.add(new Long(i));
                         docPerTerm.put(termText , current);
                     }
-                    // System.out.println("term: "+termText+", termFreq = "+termFreq+", docCount = "+docCount); 
+                    // System.out.println("term: "+termText+", termFreq = "+termFreq);
                 }
                 String path = "result/document" + Integer.toString(i) + ".txt";
                 txtSaver(path, tf.toString());
