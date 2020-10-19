@@ -58,13 +58,14 @@ public class indexing {
             IndexWriter writer = new IndexWriter(dir, iwc);
 
             // Its recursive method to iterate all files and directories
-            indexDocs(writer, docDir);
+            Map<Integer, String> mapToReal = indexDocs(writer, docDir);
 
             writer.close();
+            termFrequency(indexPath, mapToReal);
+
         } catch (IOException e) {
             e.printStackTrace();
         }
-        termFrequency("hi");
     }
 
     // This method seperates the group's documents from the whole dataset based on
@@ -103,31 +104,32 @@ public class indexing {
         }
     }
 
-    static void indexDocs(final IndexWriter writer, Path path) throws IOException {
+    static Map<Integer, String> indexDocs(final IndexWriter writer, Path path) throws IOException {
         // Directory?
+        Map<Integer, String> mapToReal = new HashMap<Integer, String>();
         if (Files.isDirectory(path)) {
             // Iterate directory
-
             Files.walkFileTree(path, new SimpleFileVisitor<Path>() {
-                // Map<Integer , String> mapToReal = new HashMap<Integer, String>();
-                // int k = 0;
+                int k = 0;
                 @Override
                 public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
                     try {
                         // Index this file
-                        // System.out.println("hi->");
-                        // mapToReal.put(k , file.toString());
+                        mapToReal.put(k , file.toString());
+                        k++;
                         indexDoc(writer, file, attrs.lastModifiedTime().toMillis());
                     } catch (IOException ioe) {
                         ioe.printStackTrace();
                     }
                     return FileVisitResult.CONTINUE;
                 }
+
             });
         } else {
             // Index this file
             indexDoc(writer, path, Files.getLastModifiedTime(path).toMillis());
         }
+        return mapToReal;
     }
 
     static void indexDoc(IndexWriter writer, Path file, long lastModified) throws IOException {
@@ -148,10 +150,8 @@ public class indexing {
     }
 
     //find term frequency for each term in each document and save result csv file
-    static void termFrequency(String indexPath){
-
-        List<Map<String, Long>> listofTF = new ArrayList<Map<String, Long>>();
-        Map<String, List<Long>> docPerTerm = new HashMap<String,List<Long>>();
+    static void termFrequency(String indexPath,Map<Integer, String> mapToreal){
+        Map<String, List<String>> docPerTerm = new HashMap<String,List<String>>();
 
         for(int i = 0; i < 103 ; i++){
             Map<String,Long> tf = new HashMap<String,Long>();
@@ -171,36 +171,30 @@ public class indexing {
 
                     tf.put(termText, termFreq);
 
+                    String docName = mapToreal.get(i);
+                    String docNum = docName.replaceAll("[^0-9]", "");
+
                     if(docPerTerm.containsKey(termText)){
-                        List<Long> current = docPerTerm.get(termText);
-                        current.add(new Long(i));
+                        List<String> current = docPerTerm.get(termText);
+                        current.add(docNum);
                         docPerTerm.put(termText , current);
                     }
                     else{
-                        List<Long> current = new ArrayList<Long>();
-                        current.add(new Long(i));
+                        List<String> current = new ArrayList<String>();
+                        current.add(docNum);
                         docPerTerm.put(termText , current);
                     }
-                    // System.out.println("term: "+termText+", termFreq = "+termFreq);
-                }
-                String path = "result/document" + Integer.toString(i) + ".txt";
-                txtSaver(path, tf.toString());
-                listofTF.add(tf);
-                reader.close();
+                    String path = "result/document" + docNum + ".txt";
+                    txtSaver(path, tf.toString());
+                    reader.close();
 
+                }
             }catch(IOException ioe){
                 ioe.printStackTrace();
             }
         }
         String path = "result/DocPerTerm.txt";
         txtSaver(path, docPerTerm.toString());
-        // for(int i = 0 ; i < 102 ; i++){
-        //     System.out.println("----------------------------------------------->DOCUMET" + i);
-        //     for(Map.Entry<String,Long> entry : listofTF.get(i).entrySet()){
-        //         System.out.println(entry.getKey() + entry.getValue());
-
-        //     }
-        // }
     }
 
         
